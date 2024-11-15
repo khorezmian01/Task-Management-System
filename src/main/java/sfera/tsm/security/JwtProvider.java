@@ -19,9 +19,9 @@ public class JwtProvider implements AuthenticationProvider {
     private Long ttl ;
 
 
-    public String generateToken(String  phoneNumber){
+    public String generateToken(String  email){
         return Jwts.builder()
-                .setSubject(phoneNumber)
+                .setSubject(email)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + ttl))
                 .signWith(SignatureAlgorithm.HS512, key)

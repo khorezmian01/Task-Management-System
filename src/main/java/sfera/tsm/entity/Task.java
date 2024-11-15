@@ -1,10 +1,7 @@
 package sfera.tsm.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import sfera.tsm.entity.enums.Priority;
 import sfera.tsm.entity.enums.Status;
 
@@ -15,6 +12,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @Entity
+@Builder
 public class Task {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
