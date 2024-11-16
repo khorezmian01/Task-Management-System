@@ -130,36 +130,42 @@ public class TaskService {
                     .orElseThrow(() -> new NotFoundException("User with id: " + authorId + "not found"));
             PageRequest pageRequest = PageRequest.of(page, size);
             Page<Task> allTasksByAuthorId = taskRepository.getAllTasksByAuthorId(author.getId(), pageRequest);
-            List<ResponseTask> responseTasks = new ArrayList<>();
-            for (Task task : allTasksByAuthorId.getContent()) {
-                ResponseTask responseTask = ResponseTask.builder()
-                        .id(task.getId())
-                        .title(task.getTitle())
-                        .description(task.getDescription())
-                        .comments(commentRepository.findAllByTaskId(task.getId()).stream()
-                                .map(comment -> CommentDto.builder()
-                                        .id(comment.getId())
-                                        .text(comment.getText())
-                                        .build())
-                                .toList())
-                        .build();
-                responseTasks.add(responseTask);
-            }
-            return ResPageable.builder()
-                    .page(page)
-                    .size(size)
-                    .totalElements(allTasksByAuthorId.getTotalElements())
-                    .totalPage(allTasksByAuthorId.getTotalPages())
-                    .data(responseTasks)
-                    .build();
+            return getResPageable(page, size, allTasksByAuthorId);
 
         }
         else if(authorId == null && executorId != null) {
             User executor = userRepository.findByIdAndRole(executorId, ERole.ROLE_USER.name())
                     .orElseThrow(() -> new NotFoundException("User with id: " + executorId + "not found"));
+            PageRequest pageRequest = PageRequest.of(page, size);
+            Page<Task> allTasksByExecutorId = taskRepository.getAllTasksByExecutorId(executor.getId(), pageRequest);
+            return getResPageable(page, size, allTasksByExecutorId);
+        }else
+            throw new RuntimeException("вы не можете указать одновременно authorId и executorId");
+    }
 
-
+    private ResPageable getResPageable(int page, int size, Page<Task> allTasksByAuthorId) {
+        List<ResponseTask> responseTasks = new ArrayList<>();
+        for (Task task : allTasksByAuthorId.getContent()) {
+            ResponseTask responseTask = ResponseTask.builder()
+                    .id(task.getId())
+                    .title(task.getTitle())
+                    .description(task.getDescription())
+                    .comments(commentRepository.findAllByTaskId(task.getId()).stream()
+                            .map(comment -> CommentDto.builder()
+                                    .id(comment.getId())
+                                    .text(comment.getText())
+                                    .build())
+                            .toList())
+                    .build();
+            responseTasks.add(responseTask);
         }
+        return ResPageable.builder()
+                .page(page)
+                .size(size)
+                .totalElements(allTasksByAuthorId.getTotalElements())
+                .totalPage(allTasksByAuthorId.getTotalPages())
+                .data(responseTasks)
+                .build();
     }
 
 
