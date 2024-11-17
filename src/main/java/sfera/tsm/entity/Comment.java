@@ -2,6 +2,9 @@ package sfera.tsm.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -20,4 +23,6 @@ public class Comment {
     private Task task;
     @ManyToOne
     private User createdBy;
+    @CreationTimestamp
+    private LocalDateTime createdAt;
 }

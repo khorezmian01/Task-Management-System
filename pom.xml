@@ -9,8 +9,8 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>sfera</groupId>
+    <version>0.1</version>
     <artifactId>TSM</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
     <name>TSM</name>
     <description>TSM</description>
     <url/>

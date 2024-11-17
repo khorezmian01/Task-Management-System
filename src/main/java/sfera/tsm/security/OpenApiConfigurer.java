@@ -15,11 +15,11 @@ import org.springframework.context.annotation.Configuration;
                 @SecurityRequirement(name = "Bearer")
         }
 )
-//@SecurityScheme(
-//        name = "Bearer",
-//        type = SecuritySchemeType.HTTP,
-//        bearerFormat = "JWT",
-//        scheme = "Bearer"
-//)
+@SecurityScheme(
+        name = "Bearer",
+        type = SecuritySchemeType.HTTP,
+        bearerFormat = "JWT",
+        scheme = "Bearer"
+)
 public class OpenApiConfigurer {
 }

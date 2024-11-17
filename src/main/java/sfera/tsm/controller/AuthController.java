@@ -9,7 +9,7 @@ import sfera.tsm.dto.RegisterDto;
 import sfera.tsm.service.AuthService;
 
 @RestController
-@RequestMapping
+@RequestMapping("/auth")
 @RequiredArgsConstructor
 @CrossOrigin(maxAge = 3600)
 public class AuthController {

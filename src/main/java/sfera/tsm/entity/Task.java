@@ -1,5 +1,7 @@
 package sfera.tsm.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.persistence.*;
 import lombok.*;
 import sfera.tsm.entity.enums.Priority;
@@ -12,6 +14,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @Entity
+@EqualsAndHashCode
 @Builder
 public class Task {
     @Id
@@ -26,5 +29,8 @@ public class Task {
     private Priority priority;
     @ManyToOne
     private User author;
+    @OneToMany(mappedBy = "task", cascade = CascadeType.REMOVE)
+    @JsonIgnore
+    private List<Comment> comments;
 
 }
