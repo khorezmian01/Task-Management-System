@@ -1,7 +1,9 @@
-FROM openjdk:17-jre-slim
+FROM openjdk:17-jdk-slim
 
 WORKDIR /app
 
-COPY --from=build /app/target/TSM-0.1.jar /app/tsm.jar
+COPY target/TSM-0.1.jar tsm.jar
 
-CMD ["java", "-jar", "/app/tsm.jar"]
+EXPOSE 8080
+
+ENTRYPOINT ["java", "-jar", "tsm.jar"]
