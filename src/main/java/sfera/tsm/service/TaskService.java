@@ -2,6 +2,9 @@ package sfera.tsm.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -33,6 +36,7 @@ public class TaskService {
     private final UserRepository userRepository;
     private final CommentRepository commentRepository;
 
+    @CachePut(value = "tasks", key = "#taskDto.id")
     public Long createTask(TaskDto taskDto, Priority priority, User user) {
         Task task = Task.builder()
                 .title(taskDto.getTitle())
@@ -45,6 +49,7 @@ public class TaskService {
         return save.getId();
     }
 
+    @Cacheable(value = "tasks", key = "#id")
     public TaskDto getTaskById(Long id) {
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Task with id: "+id+" not found"));
@@ -95,6 +100,7 @@ public class TaskService {
         return task1.getId();
     }
 
+    @CacheEvict(value = "tasks", key = "#id")
     public Long deleteTask(Long id) {
         Task task1 = taskRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Task with id: " + id + "not found"));

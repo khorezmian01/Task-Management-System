@@ -7,6 +7,7 @@ import lombok.*;
 import sfera.tsm.entity.enums.Priority;
 import sfera.tsm.entity.enums.Status;
 
+import java.io.Serializable;
 import java.util.List;
 
 @Getter
@@ -16,7 +17,7 @@ import java.util.List;
 @Entity
 @EqualsAndHashCode
 @Builder
-public class Task {
+public class Task implements Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
