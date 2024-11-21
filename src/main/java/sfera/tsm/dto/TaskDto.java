@@ -7,7 +7,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
 import java.io.Serializable;
 import java.util.List;
 
@@ -17,9 +16,10 @@ import java.util.List;
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class TaskDto implements Serializable {
+
     @Schema(hidden = true)
     private Long id;
-    @NotBlank
+    @NotBlank(message = "поле не должно пустым")
     private String title;
     private String description;
     @Schema(hidden = true)
@@ -28,4 +28,5 @@ public class TaskDto implements Serializable {
     private String status;
     @Schema(hidden = true)
     private List<CommentDto> comments;
+
 }

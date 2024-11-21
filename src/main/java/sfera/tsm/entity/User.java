@@ -30,7 +30,7 @@ public class User implements UserDetails {
     @Enumerated(EnumType.STRING)
     private ERole role;
 
-    @ManyToMany
+    @ManyToMany(cascade = CascadeType.ALL)
     private List<Task> tasks;
     @CreationTimestamp
     private LocalDateTime createdAt;

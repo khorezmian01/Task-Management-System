@@ -20,6 +20,7 @@ import sfera.tsm.entity.enums.ERole;
 import sfera.tsm.entity.enums.Priority;
 import sfera.tsm.entity.enums.Status;
 import sfera.tsm.exception.NotFoundException;
+import sfera.tsm.exception.TaskIsNotYourException;
 import sfera.tsm.repository.CommentRepository;
 import sfera.tsm.repository.TaskRepository;
 import sfera.tsm.repository.UserRepository;
@@ -36,7 +37,6 @@ public class TaskService {
     private final UserRepository userRepository;
     private final CommentRepository commentRepository;
 
-    @CachePut(value = "tasks", key = "#taskDto.id")
     public Long createTask(TaskDto taskDto, Priority priority, User user) {
         Task task = Task.builder()
                 .title(taskDto.getTitle())
@@ -46,13 +46,14 @@ public class TaskService {
                 .author(user)
                 .build();
         Task save = taskRepository.save(task);
+        log.info("Task with id: {} created", save.getId());
         return save.getId();
     }
 
     @Cacheable(value = "tasks", key = "#id")
     public TaskDto getTaskById(Long id) {
         Task task = taskRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Task with id: "+id+" not found"));
+                .orElseThrow(() -> new NotFoundException("Задача с указанным ID не найдена"));
         return TaskDto.builder()
                 .id(id)
                 .title(task.getTitle())
@@ -65,63 +66,52 @@ public class TaskService {
     public ResPageable getAllTasks(int page, int size){
         PageRequest pageRequest = PageRequest.of(page, size);
         Page<Task> tasks = taskRepository.findAll(pageRequest);
-        List<TaskDto> taskDtos = new ArrayList<>();
-        for (Task task : tasks.getContent()) {
-            TaskDto taskDto = TaskDto.builder()
-                    .id(task.getId())
-                    .title(task.getTitle())
-                    .description(task.getDescription())
-                    .priority(task.getPriority().name())
-                    .status(task.getStatus().name())
-                    .comments(commentRepository.findAllByTaskId(task.getId()).stream()
-                            .map(comment -> CommentDto.builder()
-                                    .id(comment.getId())
-                                    .text(comment.getText())
-                                    .build())
-                            .toList())
-                    .build();
-            taskDtos.add(taskDto);
-        }
-        return ResPageable.builder()
-                .page(page)
-                .size(size)
-                .totalElements(tasks.getTotalElements())
-                .totalPage(tasks.getTotalPages())
-                .data(taskDtos)
-                .build();
+        return getResPageable(page, size, tasks);
     }
 
+
+    @CacheEvict(value = "tasks", key = "#id")
     public Long updateTask(Long id, TaskDto taskDto) {
         Task task1 = taskRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Task with id: " + id + "not found"));
+                .orElseThrow(() -> new NotFoundException("Задача с указанным ID не найдена"));
         task1.setTitle(taskDto.getTitle());
         task1.setDescription(taskDto.getDescription());
         taskRepository.save(task1);
+        log.info("Task with id: {} updated", id);
         return task1.getId();
     }
 
     @CacheEvict(value = "tasks", key = "#id")
     public Long deleteTask(Long id) {
         Task task1 = taskRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Task with id: " + id + "not found"));
+                .orElseThrow(() -> new NotFoundException("Задача с указанным ID не найдена"));
         taskRepository.deleteTaskFromUser(id);
+        log.info("Задача снато с пользователей");
         taskRepository.deleteById(task1.getId());
         return task1.getId();
     }
 
-    public String changeStatusAndPriority(Long id, Status status, Priority priority) {
+    @CachePut(value = "tasks", key = "#id")
+    public TaskDto changeStatusAndPriority(Long id, Status status, Priority priority) {
         Task task1 = taskRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Task with id: " + id + "not found"));
+                .orElseThrow(() -> new NotFoundException("Задача с указанным ID не найдена"));
         task1.setStatus(status);
         task1.setPriority(priority);
         taskRepository.save(task1);
-        return "Task successfully changed";
+        return TaskDto.builder()
+                .id(task1.getId())
+                .title(task1.getTitle())
+                .description(task1.getDescription())
+                .priority(task1.getPriority().name())
+                .status(task1.getStatus().name())
+                .build();
     }
 
-    public String changeStatus(Long taskId, Status status, User user){
+    @CachePut(value = "tasks", key = "#taskId")
+    public TaskDto changeStatus(Long taskId, Status status, User user){
         List<Long> taskIdByUserId = taskRepository.getTaskIdByUserId(user.getId());
         Task task1 = taskRepository.findById(taskId)
-                .orElseThrow(() -> new NotFoundException("Task with id: " + taskId + "not found"));
+                .orElseThrow(() -> new NotFoundException("Задача с указанным ID не найдена"));
         boolean isCorrectId=false;
         for (Long id: taskIdByUserId){
             if(task1.getId().equals(id)){
@@ -130,16 +120,24 @@ public class TaskService {
             }
         }
         if(isCorrectId) {
+            log.info("Задача принадлежит пользователю c ID:{} и был измене статус", user.getId());
             task1.setStatus(status);
-            return "Task status successfully changed";
+            taskRepository.save(task1);
+            return TaskDto.builder()
+                    .id(task1.getId())
+                    .title(task1.getTitle())
+                    .description(task1.getDescription())
+                    .priority(task1.getPriority().name())
+                    .status(task1.getStatus().name())
+                    .build();
         }
         else
-            return "This task is not your";
+            throw new TaskIsNotYourException("Задача с указанным ID не принадлежит вам");
     }
 
-    public String assignTaskExecutors(List<ReqExecutors> userIds, Long taskId){
+    public Long assignTaskExecutors(List<ReqExecutors> userIds, Long taskId){
         Task task1 = taskRepository.findById(taskId)
-                .orElseThrow(() -> new NotFoundException("Task with id: " + taskId + "not found"));
+                .orElseThrow(() -> new NotFoundException("Задача с указанным ID не найдена"));
         for (ReqExecutors userId : userIds) {
             Optional<User> byId = userRepository.findById(userId.getUserId());
             if(byId.isPresent()) {
@@ -150,38 +148,81 @@ public class TaskService {
                 }
             }
             else {
-                throw new NotFoundException("User with id: " + userId.getUserId() + " not found");
+                throw new NotFoundException("Пользователь с указанным ID не найден");
             }
         }
-        return "Task successfully assigned";
+        return task1.getId();
     }
 
-    public String addCommentToTask(CommentDto commentDto, User user) {
+    public ResPageable myTasks(User user, int page, int size){
+        PageRequest pageRequest = PageRequest.of(page, size);
+        Page<Task> allTasksByExecutorId = taskRepository.getAllTasksByExecutorId(user.getId(), pageRequest);
+        return getResPageable(page, size, allTasksByExecutorId);
+    }
+
+    public String userAddCommitToTask(CommentDto commentDto, User user){
+        List<Long> taskIdByUserId = taskRepository.getTaskIdByUserId(user.getId());
         Task task1 = taskRepository.findById(commentDto.getTaskId())
-                .orElseThrow(() -> new NotFoundException("Task with id: " + commentDto.getTaskId() + "not found"));
+                .orElseThrow(() -> new NotFoundException("Задача с указанным ID не найдена"));
+        boolean isCorrectId=false;
+        for (Long id: taskIdByUserId){
+            if(task1.getId().equals(id)){
+                isCorrectId=true;
+                break;
+            }
+        }
+        if(isCorrectId) {
+            log.info("Задача принадлежит пользователю c ID:{} и был добвлен комментарий", user.getId());
+            Comment comment = Comment.builder()
+                    .text(commentDto.getText())
+                    .createdBy(user)
+                    .task(task1)
+                    .build();
+            commentRepository.save(comment);
+            return "Комментрий успешно был добавлен";
+        }
+        else
+            throw new TaskIsNotYourException("Задача с указанным ID не принадлежит вам");
+    }
+
+    public Long adminAddCommentToTask(CommentDto commentDto, User user) {
+        Task task1 = taskRepository.findById(commentDto.getTaskId())
+                .orElseThrow(() -> new NotFoundException("Задача с указанным ID не найдена"));
         Comment comment = Comment.builder()
                 .text(commentDto.getText())
                 .createdBy(user)
                 .task(task1)
                 .build();
-        commentRepository.save(comment);
-        return "Comment successfully added";
+        Comment save = commentRepository.save(comment);
+        log.info("Admin with id:{} added comment to task", user.getId());
+        return save.getId();
     }
 
     public ResPageable getAllTaskByAuthorIdOrExecutorId(Long authorId, Long executorId, int page, int size) {
         if(authorId != null && executorId == null) {
+            try{
             User author = userRepository.findByIdAndRole(authorId, ERole.ROLE_ADMIN)
-                    .orElseThrow(() -> new NotFoundException("User with id: " + authorId + "not found"));
-            PageRequest pageRequest = PageRequest.of(page, size);
-            Page<Task> allTasksByAuthorId = taskRepository.getAllTasksByAuthorId(author.getId(), pageRequest);
-            return getResPageable(page, size, allTasksByAuthorId);
+                    .orElseThrow(() -> new NotFoundException("Пользователь с указанным ID не найден"));
+                PageRequest pageRequest = PageRequest.of(page, size);
+                Page<Task> allTasksByAuthorId = taskRepository.getAllTasksByAuthorId(author.getId(), pageRequest);
+                return getResPageable(page, size, allTasksByAuthorId);
+            }
+            catch (NotFoundException ex){
+                log.error("Автор с указанным ID:{} не найден", authorId);
+                throw new NotFoundException("Пользователь с указанным ID не найден");
+            }
         }
         else if(authorId == null && executorId != null) {
-            User executor = userRepository.findByIdAndRole(executorId, ERole.ROLE_USER)
-                    .orElseThrow(() -> new NotFoundException("User with id: " + executorId + "not found"));
-            PageRequest pageRequest = PageRequest.of(page, size);
-            Page<Task> allTasksByExecutorId = taskRepository.getAllTasksByExecutorId(executor.getId(), pageRequest);
-            return getResPageable(page, size, allTasksByExecutorId);
+            try {
+                User executor = userRepository.findByIdAndRole(executorId, ERole.ROLE_USER)
+                        .orElseThrow(() -> new NotFoundException("User with id: " + executorId + "not found"));
+                PageRequest pageRequest = PageRequest.of(page, size);
+                Page<Task> allTasksByExecutorId = taskRepository.getAllTasksByExecutorId(executor.getId(), pageRequest);
+                return getResPageable(page, size, allTasksByExecutorId);
+            }catch (NotFoundException exception){
+                log.error("Пользователь с указанным ID:{} не найден", executorId);
+                throw new NotFoundException("Пользователь с указанным ID не найден");
+            }
         }else
             throw new RuntimeException("вы не можете указать одновременно authorId и executorId");
     }
