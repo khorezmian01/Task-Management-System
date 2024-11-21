@@ -10,6 +10,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import sfera.tsm.dto.TaskDto;
 import sfera.tsm.dto.res.ResPageable;
 import sfera.tsm.entity.Task;
+import sfera.tsm.entity.enums.Priority;
+import sfera.tsm.entity.enums.Status;
 import sfera.tsm.exception.NotFoundException;
 import sfera.tsm.repository.TaskRepository;
 import sfera.tsm.util.DataUtils;
@@ -138,6 +140,25 @@ public class TaskServiceTests {
         //then
         verify(taskRepository, never()).deleteById(anyLong());
     }
+
+    @Test
+    @DisplayName("update status and priority functionality")
+    public void givenCorrectId_whenUpdateStatusAndPriority_thenRepoIsCalled(){
+        //given
+        Long taskId = 1L;
+        Status newStatus = Status.COMPLETED;
+        Priority newPriority = Priority.HIGH;
+        Task task1 = DataUtils.getTask1Persisted();
+        BDDMockito.given(taskRepository.findById(taskId))
+                .willReturn(Optional.ofNullable(task1));
+        //when
+        TaskDto taskDto = taskService.changeStatusAndPriority(taskId, newStatus, newPriority);
+        //then
+        verify(taskRepository, times(1)).save(any(Task.class));
+        assertThat(taskDto.getPriority()).isEqualTo(newPriority.name());
+        assertThat(taskDto.getStatus()).isEqualTo(newStatus.name());
+    }
+
 
 
 }
