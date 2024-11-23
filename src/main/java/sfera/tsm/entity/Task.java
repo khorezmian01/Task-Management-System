@@ -30,8 +30,7 @@ public class Task implements Serializable {
     private Priority priority;
     @ManyToOne
     private User author;
-    @OneToMany(mappedBy = "task", cascade = CascadeType.REMOVE)
-    @JsonIgnore
+    @OneToMany(mappedBy = "task", cascade = CascadeType.REMOVE, fetch = FetchType.LAZY)
     private List<Comment> comments;
 
 }

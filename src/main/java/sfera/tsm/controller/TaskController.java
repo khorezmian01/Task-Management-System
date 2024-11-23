@@ -3,6 +3,7 @@ package sfera.tsm.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -10,7 +11,6 @@ import org.springframework.web.bind.annotation.*;
 import sfera.tsm.dto.CommentDto;
 import sfera.tsm.dto.TaskDto;
 import sfera.tsm.dto.req.ReqExecutors;
-import sfera.tsm.dto.res.ResPageable;
 import sfera.tsm.entity.User;
 import sfera.tsm.entity.enums.Priority;
 import sfera.tsm.entity.enums.Status;
@@ -40,9 +40,8 @@ public class TaskController {
                     "400 Bad Request: Если поле title пустое, возвращает сообщение \"Поле не должно быть пустым\"." )
     @PostMapping("/create")
     public ResponseEntity<Long> createTask(@RequestBody @Valid TaskDto taskDto,
-                                           @RequestParam Priority priority,
                                            @AuthenticationPrincipal User user){
-        Long task = taskService.createTask(taskDto, priority, user);
+        Long task = taskService.createTask(taskDto, user);
         return ResponseEntity.ok(task);
     }
 
@@ -74,9 +73,9 @@ public class TaskController {
             "priority (String): Приоритет задачи.")
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @GetMapping("/page")
-    public ResponseEntity<ResPageable> getAllTasks(@RequestParam(value = "page", defaultValue = "0") int page,
+    public ResponseEntity<Page<TaskDto>> getAllTasks(@RequestParam(value = "page", defaultValue = "0") int page,
                                                    @RequestParam(value = "size", defaultValue = "10") int size){
-        ResPageable allTasks = taskService.getAllTasks(page, size);
+        Page<TaskDto> allTasks = taskService.getAllTasks(page, size);
         return ResponseEntity.ok(allTasks);
     }
 
@@ -84,6 +83,7 @@ public class TaskController {
             "\n" +
             "id (Long, обязательное): ID задачи.\n" +
             "taskDto (объект, обязательное): DTO с обновленными данными задачи.\n" +
+            "priority (Enum, обязательное): Приоритет задачи. Значения: LOW, MEDIUM, HIGH.\n"+
             "Ответы:\n" +
             "\n" +
             "200 OK: Возвращает ID обновленной задачи.\n" +
@@ -198,15 +198,14 @@ public class TaskController {
             "вы должны указать либо authorId или executorId и не можете указать одновременно authorId и executorId"+
             "Ответы:\n" +
             "\n" +
-            "200 OK: Возвращает список задач с пагинацией." +
-            "")
+            "200 OK: Возвращает список задач с пагинацией." )
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     @GetMapping("task-by-author-or-executor")
-    public ResponseEntity<ResPageable> getAllTaskByAuthorIdOrExecutorId(@RequestParam(value = "authorId", required = false) Long authorId,
+    public ResponseEntity<Page<TaskDto>> getAllTaskByAuthorIdOrExecutorId(@RequestParam(value = "authorId", required = false) Long authorId,
                                                                         @RequestParam(value = "executorId", required = false) Long executorId,
                                                                         @RequestParam(value = "page", defaultValue = "0") int page,
                                                                         @RequestParam(value = "size", defaultValue = "10") int size){
-        ResPageable allTaskByAuthorIdOrExecutorId = taskService.getAllTaskByAuthorIdOrExecutorId(authorId, executorId, page, size);
+        Page<TaskDto> allTaskByAuthorIdOrExecutorId = taskService.getAllTaskByAuthorIdOrExecutorId(authorId, executorId, page, size);
         return ResponseEntity.ok(allTaskByAuthorIdOrExecutorId);
     }
 
@@ -222,7 +221,7 @@ public class TaskController {
     @PostMapping("/add-comment")
     public ResponseEntity<String> userAddCommentToTask(@RequestBody CommentDto commentDto,
                                                        @AuthenticationPrincipal User user){
-        String string = taskService.userAddCommitToTask(commentDto, user);
+        String string = taskService.userAddCommentToTask(commentDto, user);
         return ResponseEntity.ok(string);
 
     }
@@ -230,11 +229,17 @@ public class TaskController {
     @Operation(summary = "Пользователь получает свои задачи с пагинацией")
     @GetMapping("/my-tasks")
     @PreAuthorize("hasRole('ROLE_USER')")
-    public ResponseEntity<ResPageable> getMyTasks(@AuthenticationPrincipal User user,
+    public ResponseEntity<Page<TaskDto>> getMyTasks(@AuthenticationPrincipal User user,
                                                   @RequestParam(value = "page", defaultValue = "0") int page,
                                                   @RequestParam(value = "size", defaultValue = "10") int size){
-        ResPageable resPageable = taskService.myTasks(user, page, size);
-        return ResponseEntity.ok(resPageable);
+        Page<TaskDto> taskDto = taskService.myTasks(user, page, size);
+        return ResponseEntity.ok(taskDto);
+    }
+
+    @Operation(summary = "Очищает редис кеш")
+    @GetMapping("/clear-cache")
+    public String clearCache(){
+        return taskService.clearCache();
     }
 
 }

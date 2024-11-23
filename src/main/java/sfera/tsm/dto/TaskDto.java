@@ -22,7 +22,6 @@ public class TaskDto implements Serializable {
     @NotBlank(message = "поле не должно пустым")
     private String title;
     private String description;
-    @Schema(hidden = true)
     private String priority;
     @Schema(hidden = true)
     private String status;

@@ -7,12 +7,11 @@ import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import sfera.tsm.dto.CommentDto;
 import sfera.tsm.dto.TaskDto;
 import sfera.tsm.dto.req.ReqExecutors;
-import sfera.tsm.dto.res.ResPageable;
-import sfera.tsm.dto.res.ResponseTask;
 import sfera.tsm.entity.Comment;
 import sfera.tsm.entity.Task;
 import sfera.tsm.entity.User;
@@ -21,10 +20,10 @@ import sfera.tsm.entity.enums.Priority;
 import sfera.tsm.entity.enums.Status;
 import sfera.tsm.exception.NotFoundException;
 import sfera.tsm.exception.TaskIsNotYourException;
+import sfera.tsm.mapper.TaskMapper;
 import sfera.tsm.repository.CommentRepository;
 import sfera.tsm.repository.TaskRepository;
 import sfera.tsm.repository.UserRepository;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -36,15 +35,12 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final UserRepository userRepository;
     private final CommentRepository commentRepository;
+    private final TaskMapper taskMapper;
 
-    public Long createTask(TaskDto taskDto, Priority priority, User user) {
-        Task task = Task.builder()
-                .title(taskDto.getTitle())
-                .description(taskDto.getDescription())
-                .priority(priority)
-                .status(Status.WAITING)
-                .author(user)
-                .build();
+    public Long createTask(TaskDto taskDto, User user) {
+        Task task = taskMapper.toTask(taskDto);
+        task.setStatus(Status.WAITING);
+        task.setAuthor(user);
         Task save = taskRepository.save(task);
         log.info("Task with id: {} created", save.getId());
         return save.getId();
@@ -54,19 +50,12 @@ public class TaskService {
     public TaskDto getTaskById(Long id) {
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Задача с указанным ID не найдена"));
-        return TaskDto.builder()
-                .id(id)
-                .title(task.getTitle())
-                .description(task.getDescription())
-                .priority(task.getPriority().name())
-                .status(task.getStatus().name())
-                .build();
+        return taskMapper.toOneTaskDto(task);
     }
 
-    public ResPageable getAllTasks(int page, int size){
-        PageRequest pageRequest = PageRequest.of(page, size);
-        Page<Task> tasks = taskRepository.findAll(pageRequest);
-        return getResPageable(page, size, tasks);
+    public Page<TaskDto> getAllTasks(int page, int size){
+        Pageable pageable = PageRequest.of(page, size);
+        return taskRepository.findAll(pageable).map(taskMapper::toDto);
     }
 
 
@@ -76,6 +65,7 @@ public class TaskService {
                 .orElseThrow(() -> new NotFoundException("Задача с указанным ID не найдена"));
         task1.setTitle(taskDto.getTitle());
         task1.setDescription(taskDto.getDescription());
+        task1.setPriority(Priority.valueOf(taskDto.getPriority()));
         taskRepository.save(task1);
         log.info("Task with id: {} updated", id);
         return task1.getId();
@@ -97,14 +87,8 @@ public class TaskService {
                 .orElseThrow(() -> new NotFoundException("Задача с указанным ID не найдена"));
         task1.setStatus(status);
         task1.setPriority(priority);
-        taskRepository.save(task1);
-        return TaskDto.builder()
-                .id(task1.getId())
-                .title(task1.getTitle())
-                .description(task1.getDescription())
-                .priority(task1.getPriority().name())
-                .status(task1.getStatus().name())
-                .build();
+        Task save = taskRepository.save(task1);
+        return taskMapper.toOneTaskDto(save);
     }
 
     @CachePut(value = "tasks", key = "#taskId")
@@ -123,13 +107,7 @@ public class TaskService {
             log.info("Задача принадлежит пользователю c ID:{} и был измене статус", user.getId());
             task1.setStatus(status);
             taskRepository.save(task1);
-            return TaskDto.builder()
-                    .id(task1.getId())
-                    .title(task1.getTitle())
-                    .description(task1.getDescription())
-                    .priority(task1.getPriority().name())
-                    .status(task1.getStatus().name())
-                    .build();
+            return taskMapper.toOneTaskDto(task1);
         }
         else
             throw new TaskIsNotYourException("Задача с указанным ID не принадлежит вам");
@@ -154,13 +132,14 @@ public class TaskService {
         return task1.getId();
     }
 
-    public ResPageable myTasks(User user, int page, int size){
+    public Page<TaskDto> myTasks(User user, int page, int size){
         PageRequest pageRequest = PageRequest.of(page, size);
-        Page<Task> allTasksByExecutorId = taskRepository.getAllTasksByExecutorId(user.getId(), pageRequest);
-        return getResPageable(page, size, allTasksByExecutorId);
+        return taskRepository.getAllTasksByExecutorId(user.getId(), pageRequest)
+                .map(taskMapper::toDto);
+
     }
 
-    public String userAddCommitToTask(CommentDto commentDto, User user){
+    public String userAddCommentToTask(CommentDto commentDto, User user){
         List<Long> taskIdByUserId = taskRepository.getTaskIdByUserId(user.getId());
         Task task1 = taskRepository.findById(commentDto.getTaskId())
                 .orElseThrow(() -> new NotFoundException("Задача с указанным ID не найдена"));
@@ -198,14 +177,13 @@ public class TaskService {
         return save.getId();
     }
 
-    public ResPageable getAllTaskByAuthorIdOrExecutorId(Long authorId, Long executorId, int page, int size) {
+    public Page<TaskDto> getAllTaskByAuthorIdOrExecutorId(Long authorId, Long executorId, int page, int size) {
         if(authorId != null && executorId == null) {
             try{
             User author = userRepository.findByIdAndRole(authorId, ERole.ROLE_ADMIN)
                     .orElseThrow(() -> new NotFoundException("Пользователь с указанным ID не найден"));
                 PageRequest pageRequest = PageRequest.of(page, size);
-                Page<Task> allTasksByAuthorId = taskRepository.getAllTasksByAuthorId(author.getId(), pageRequest);
-                return getResPageable(page, size, allTasksByAuthorId);
+                return taskRepository.getAllTasksByAuthorId(author.getId(), pageRequest).map(taskMapper::toDto);
             }
             catch (NotFoundException ex){
                 log.error("Автор с указанным ID:{} не найден", authorId);
@@ -217,8 +195,8 @@ public class TaskService {
                 User executor = userRepository.findByIdAndRole(executorId, ERole.ROLE_USER)
                         .orElseThrow(() -> new NotFoundException("User with id: " + executorId + "not found"));
                 PageRequest pageRequest = PageRequest.of(page, size);
-                Page<Task> allTasksByExecutorId = taskRepository.getAllTasksByExecutorId(executor.getId(), pageRequest);
-                return getResPageable(page, size, allTasksByExecutorId);
+                return taskRepository.getAllTasksByExecutorId(executor.getId(), pageRequest)
+                        .map(taskMapper::toDto);
             }catch (NotFoundException exception){
                 log.error("Пользователь с указанным ID:{} не найден", executorId);
                 throw new NotFoundException("Пользователь с указанным ID не найден");
@@ -227,34 +205,9 @@ public class TaskService {
             throw new RuntimeException("вы не можете указать одновременно authorId и executorId");
     }
 
-    private ResPageable getResPageable(int page, int size, Page<Task> allTasksByAuthorId) {
-        List<ResponseTask> responseTasks = new ArrayList<>();
-        for (Task task : allTasksByAuthorId.getContent()) {
-            ResponseTask responseTask = ResponseTask.builder()
-                    .id(task.getId())
-                    .title(task.getTitle())
-                    .description(task.getDescription())
-                    .status(task.getStatus().name())
-                    .priority(task.getPriority().name())
-                    .comments(commentRepository.findAllByTaskId(task.getId()).stream()
-                            .map(comment -> CommentDto.builder()
-                                    .id(comment.getId())
-                                    .text(comment.getText())
-                                    .userEmail(comment.getCreatedBy().getEmail())
-                                    .createdAt(comment.getCreatedAt())
-                                    .build())
-                            .toList())
-                    .build();
-            responseTasks.add(responseTask);
-        }
-        return ResPageable.builder()
-                .page(page)
-                .size(size)
-                .totalElements(allTasksByAuthorId.getTotalElements())
-                .totalPage(allTasksByAuthorId.getTotalPages())
-                .data(responseTasks)
-                .build();
+    @CacheEvict(value = "tasks",allEntries = true)
+    public String clearCache(){
+        return "Кеш успешно очищен";
     }
-
 
 }

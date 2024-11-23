@@ -7,22 +7,26 @@ import org.mockito.BDDMockito;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import sfera.tsm.dto.TaskDto;
-import sfera.tsm.dto.res.ResPageable;
 import sfera.tsm.entity.Task;
 import sfera.tsm.entity.enums.Priority;
 import sfera.tsm.entity.enums.Status;
 import sfera.tsm.exception.NotFoundException;
+import sfera.tsm.mapper.TaskMapper;
+import sfera.tsm.repository.CommentRepository;
 import sfera.tsm.repository.TaskRepository;
 import sfera.tsm.util.DataUtils;
 
-import javax.xml.crypto.Data;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,7 +34,10 @@ public class TaskServiceTests {
 
     @Mock
     private TaskRepository taskRepository;
-
+    @Mock
+    private CommentRepository commentRepository;
+    @Mock
+    private TaskMapper taskMapper;
     @InjectMocks
     private TaskService taskService;
 
@@ -59,6 +66,7 @@ public class TaskServiceTests {
         TaskDto taskDto = TaskDto.builder()
                 .title(task1Persisted.getTitle())
                 .description(task1Persisted.getDescription())
+                .priority(task1Persisted.getPriority().name())
                 .build();
         //when
         Long l = taskService.updateTask(taskId, taskDto);
@@ -73,7 +81,13 @@ public class TaskServiceTests {
         //given
         Long taskId = 1L;
         Task task = DataUtils.getTask1Persisted();
-        BDDMockito.given(taskRepository.findById(anyLong())).willReturn(Optional.ofNullable(task));
+        TaskDto taskDto = TaskDto.builder()
+                .title(task.getTitle())
+                .description(task.getDescription())
+                .priority(task.getPriority().name())
+                .build();
+        BDDMockito.given(taskRepository.findById(anyLong())).willReturn(Optional.of(task));
+        BDDMockito.given(taskMapper.toOneTaskDto(task)).willReturn(taskDto);
         //when
         TaskDto taskById = taskService.getTaskById(taskId);
         //then
@@ -91,31 +105,24 @@ public class TaskServiceTests {
         //then
     }
 
-//    @Test
-//    @DisplayName("get all tasks functionality")
-//    public void givenTasks_whenGetAll_thenTasksAreReturned(){
-//        //given
-//        Task task1 = DataUtils.getTask1Persisted();
-//        Task task2 = DataUtils.getTask2Persisted();
-//        Task task3 = DataUtils.getTask3Persisted();
-//        List<Task> tasks = List.of(task1, task2, task3);
-//        ResPageable resPageable = ResPageable.builder()
-//                .page(0)
-//                .size(10)
-//                .totalPage(1)
-//                .totalElements(3L)
-//                .data(tasks)
-//                .build();
-//        BDDMockito.given(taskService.getAllTasks(0, 10)).willReturn(resPageable);
-//
-//        //when
-//        ResPageable allTasks = taskService.getAllTasks(0, 10);
-//        //then
-//        assertThat(allTasks.getSize()).isEqualTo(10);
-//        assertThat(allTasks.getPage()).isEqualTo(0);
-//        assertThat(allTasks.getTotalPage()).isEqualTo(1);
-//        assertThat(allTasks.getTotalElements()).isEqualTo(3);
-//    }
+    @Test
+    @DisplayName("get all tasks functionality")
+    public void givenTasks_whenGetAll_thenTasksAreReturned(){
+        //given
+        Task task1 = DataUtils.getTask1Persisted();
+        Task task2 = DataUtils.getTask2Persisted();
+        Task task3 = DataUtils.getTask3Persisted();
+        List<Task> tasks = List.of(task1, task2, task3);
+        Page<Task> taskDtos = new PageImpl<>(tasks);
+        PageRequest pageRequest = PageRequest.of(0, 3);
+        BDDMockito.given(taskRepository.findAll(pageRequest))
+                .willReturn(taskDtos);
+        //when
+        Page<TaskDto> allTasks = taskService.getAllTasks(0, 3);
+        //then
+        assertThat(allTasks.getSize()).isEqualTo(3);
+        assertThat(allTasks.getTotalElements()).isEqualTo(3);
+    }
 
     @Test
     @DisplayName("delete task by id functionality")
@@ -149,16 +156,27 @@ public class TaskServiceTests {
         Status newStatus = Status.COMPLETED;
         Priority newPriority = Priority.HIGH;
         Task task1 = DataUtils.getTask1Persisted();
+        Task updatedTask = Task.builder()
+                .title(task1.getTitle())
+                .description(task1.getDescription())
+                .priority(newPriority)
+                .status(newStatus)
+                .build();
+        TaskDto taskDto = TaskDto.builder()
+                .title(task1.getTitle())
+                .description(task1.getDescription())
+                .priority(newPriority.name())
+                .status(newStatus.name())
+                .build();
         BDDMockito.given(taskRepository.findById(taskId))
                 .willReturn(Optional.ofNullable(task1));
+        BDDMockito.given(taskRepository.save(any(Task.class))).willReturn(updatedTask);
+        BDDMockito.given(taskMapper.toOneTaskDto(any(Task.class))).willReturn(taskDto);
         //when
-        TaskDto taskDto = taskService.changeStatusAndPriority(taskId, newStatus, newPriority);
+        TaskDto taskDto2 = taskService.changeStatusAndPriority(taskId, newStatus, newPriority);
         //then
         verify(taskRepository, times(1)).save(any(Task.class));
-        assertThat(taskDto.getPriority()).isEqualTo(newPriority.name());
-        assertThat(taskDto.getStatus()).isEqualTo(newStatus.name());
+        assertThat(taskDto2.getPriority()).isEqualTo(newPriority.name());
+        assertThat(taskDto2.getStatus()).isEqualTo(newStatus.name());
     }
-
-
-
 }
